@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/hashicorp/consul-net-rpc/net/rpc"
 
@@ -247,11 +248,12 @@ func testServerWithConfig(t *testing.T, configOpts ...func(*Config)) (string, *S
 		externalGRPCAddr := fmt.Sprintf("127.0.0.1:%d", srv.config.GRPCPort)
 
 		ln, err := net.Listen("tcp", externalGRPCAddr)
+		// TODO does this need TLS attached to it?
 		require.NoError(t, err)
 		go func() {
-			_ = srv.externalGRPCServers[0].Serve(ln)
+			_ = srv.externalGRPCServer.Serve(ln)
 		}()
-		t.Cleanup(srv.externalGRPCServers[0].Stop)
+		t.Cleanup(srv.externalGRPCServer.Stop)
 	}
 
 	return dir, srv
@@ -301,18 +303,16 @@ func newServerWithDeps(t *testing.T, c *Config, deps Deps) (*Server, error) {
 		}
 	}
 
-	// setup grpc servers
-	srvGRPC, srvGRPCTLS := external.BuildExternalGRPCServers(
-		c.GRPCPort, c.GRPCTLSPort, deps.TLSConfigurator, deps.Logger)
-	var grpcServers []*grpc.Server
-	if srvGRPC != nil {
-		grpcServers = append(grpcServers, srvGRPC)
-	}
-	if srvGRPCTLS != nil {
-		grpcServers = append(grpcServers, srvGRPCTLS)
+	// setup grpc server
+	var grpcServer *grpc.Server
+	if deps.TLSConfigurator.GRPCServerUseTLS() {
+		creds := credentials.NewTLS(deps.TLSConfigurator.IncomingGRPCConfig())
+		grpcServer = external.NewServer(deps.Logger.Named("grpc.external"), grpc.Creds(creds))
+	} else {
+		grpcServer = external.NewServer(deps.Logger.Named("grpc.external"))
 	}
 
-	srv, err := NewServer(c, deps, grpcServers)
+	srv, err := NewServer(c, deps, grpcServer)
 	if err != nil {
 		return nil, err
 	}
@@ -1219,7 +1219,7 @@ func TestServer_RPC_MetricsIntercept_Off(t *testing.T) {
 			}
 		}
 
-		s1, err := NewServer(conf, deps, []*grpc.Server{grpc.NewServer()})
+		s1, err := NewServer(conf, deps, grpc.NewServer())
 		if err != nil {
 			t.Fatalf("err: %v", err)
 		}
@@ -1257,7 +1257,7 @@ func TestServer_RPC_MetricsIntercept_Off(t *testing.T) {
 			return nil
 		}
 
-		s2, err := NewServer(conf, deps, []*grpc.Server{grpc.NewServer()})
+		s2, err := NewServer(conf, deps, grpc.NewServer())
 		if err != nil {
 			t.Fatalf("err: %v", err)
 		}
@@ -1291,7 +1291,7 @@ func TestServer_RPC_RequestRecorder(t *testing.T) {
 		deps := newDefaultDeps(t, conf)
 		deps.NewRequestRecorderFunc = nil
 
-		s1, err := NewServer(conf, deps, []*grpc.Server{grpc.NewServer()})
+		s1, err := NewServer(conf, deps, grpc.NewServer())
 
 		require.Error(t, err, "need err when provider func is nil")
 		require.Equal(t, err.Error(), "cannot initialize server without an RPC request recorder provider")
@@ -1310,7 +1310,7 @@ func TestServer_RPC_RequestRecorder(t *testing.T) {
 			return nil
 		}
 
-		s2, err := NewServer(conf, deps, []*grpc.Server{grpc.NewServer()})
+		s2, err := NewServer(conf, deps, grpc.NewServer())
 
 		require.Error(t, err, "need err when RequestRecorder is nil")
 		require.Equal(t, err.Error(), "cannot initialize server with a nil RPC request recorder")
