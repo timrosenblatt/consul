@@ -1,6 +1,7 @@
 package consul
 
 import (
+	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"net"
@@ -21,7 +22,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 
 	"github.com/hashicorp/consul-net-rpc/net/rpc"
 
@@ -219,9 +219,9 @@ func testServerWithConfig(t *testing.T, configOpts ...func(*Config)) (string, *S
 	var dir string
 	var srv *Server
 
+	var config *Config
 	// Retry added to avoid cases where bind addr is already in use
 	retry.RunWith(retry.ThreeTimes(), t, func(r *retry.R) {
-		var config *Config
 		dir, config = testServerConfig(t)
 		for _, fn := range configOpts {
 			fn(config)
@@ -246,10 +246,15 @@ func testServerWithConfig(t *testing.T, configOpts ...func(*Config)) (string, *S
 		// Normally the gRPC server listener is created at the agent level and
 		// passed down into the Server creation.
 		externalGRPCAddr := fmt.Sprintf("127.0.0.1:%d", srv.config.GRPCPort)
-
 		ln, err := net.Listen("tcp", externalGRPCAddr)
-		// TODO does this need TLS attached to it?
 		require.NoError(t, err)
+
+		// Wrap the listener with TLS
+		deps := newDefaultDeps(t, config)
+		if deps.TLSConfigurator.GRPCServerUseTLS() {
+			ln = tls.NewListener(ln, deps.TLSConfigurator.IncomingGRPCConfig())
+		}
+
 		go func() {
 			_ = srv.externalGRPCServer.Serve(ln)
 		}()
@@ -302,16 +307,7 @@ func newServerWithDeps(t *testing.T, c *Config, deps Deps) (*Server, error) {
 			oldNotify()
 		}
 	}
-
-	// setup grpc server
-	var grpcServer *grpc.Server
-	if deps.TLSConfigurator.GRPCServerUseTLS() {
-		creds := credentials.NewTLS(deps.TLSConfigurator.IncomingGRPCConfig())
-		grpcServer = external.NewServer(deps.Logger.Named("grpc.external"), grpc.Creds(creds))
-	} else {
-		grpcServer = external.NewServer(deps.Logger.Named("grpc.external"))
-	}
-
+	grpcServer := external.NewServer(deps.Logger.Named("grpc.external"))
 	srv, err := NewServer(c, deps, grpcServer)
 	if err != nil {
 		return nil, err
