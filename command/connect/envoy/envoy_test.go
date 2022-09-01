@@ -1391,7 +1391,12 @@ func testMockAgentSelf(wantXDSPort int, agentSelf110 bool) http.HandlerFunc {
 				"GRPCPort": wantXDSPort,
 			}
 		} else {
-			resp.XDS = &agent.XDSSelf{Port: wantXDSPort}
+			resp.XDS = &agent.XDSSelf{
+				Port: wantXDSPort,
+				Ports: agent.GRPCPorts{
+					Plaintext: wantXDSPort,
+				},
+			}
 		}
 
 		selfJSON, err := json.Marshal(resp)

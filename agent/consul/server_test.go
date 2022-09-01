@@ -220,6 +220,7 @@ func testServerWithConfig(t *testing.T, configOpts ...func(*Config)) (string, *S
 	var srv *Server
 
 	var config *Config
+	var deps Deps
 	// Retry added to avoid cases where bind addr is already in use
 	retry.RunWith(retry.ThreeTimes(), t, func(r *retry.R) {
 		dir, config = testServerConfig(t)
@@ -235,7 +236,8 @@ func testServerWithConfig(t *testing.T, configOpts ...func(*Config)) (string, *S
 		config.ACLResolverSettings.EnterpriseMeta = *config.AgentEnterpriseMeta()
 
 		var err error
-		srv, err = newServer(t, config)
+		deps = newDefaultDeps(t, config)
+		srv, err = newServerWithDeps(t, config, deps)
 		if err != nil {
 			r.Fatalf("err: %v", err)
 		}
@@ -250,7 +252,6 @@ func testServerWithConfig(t *testing.T, configOpts ...func(*Config)) (string, *S
 		require.NoError(t, err)
 
 		// Wrap the listener with TLS
-		deps := newDefaultDeps(t, config)
 		if deps.TLSConfigurator.GRPCServerUseTLS() {
 			ln = tls.NewListener(ln, deps.TLSConfigurator.IncomingGRPCConfig())
 		}
