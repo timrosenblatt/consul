@@ -26,8 +26,7 @@ func peerExistsInPeerListings(peer *Peering, peerings []*Peering) bool {
 			(peer.State == aPeer.State) &&
 			(peer.CreateIndex == aPeer.CreateIndex) &&
 			(peer.ModifyIndex == aPeer.ModifyIndex) &&
-			(peer.ImportedServiceCount == aPeer.ImportedServiceCount) &&
-			(peer.ExportedServiceCount == aPeer.ExportedServiceCount)
+			(reflect.DeepEqual(peer.StreamStatus, aPeer.StreamStatus))
 
 		if isEqual {
 			return true

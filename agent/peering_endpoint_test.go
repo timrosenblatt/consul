@@ -390,8 +390,8 @@ func TestHTTP_Peering_Read(t *testing.T) {
 		require.Equal(t, foo.Peering.Name, apiResp.Name)
 		require.Equal(t, foo.Peering.Meta, apiResp.Meta)
 
-		require.Equal(t, uint64(0), apiResp.ImportedServiceCount)
-		require.Equal(t, uint64(0), apiResp.ExportedServiceCount)
+		require.Equal(t, uint64(0), apiResp.StreamStatus.ImportedServiceCount)
+		require.Equal(t, uint64(0), apiResp.StreamStatus.ExportedServiceCount)
 
 	})
 
@@ -519,8 +519,8 @@ func TestHTTP_Peering_List(t *testing.T) {
 		require.Len(t, apiResp, 2)
 
 		for _, p := range apiResp {
-			require.Equal(t, uint64(0), p.ImportedServiceCount)
-			require.Equal(t, uint64(0), p.ExportedServiceCount)
+			require.Equal(t, uint64(0), p.StreamStatus.ImportedServiceCount)
+			require.Equal(t, uint64(0), p.StreamStatus.ExportedServiceCount)
 		}
 	})
 }

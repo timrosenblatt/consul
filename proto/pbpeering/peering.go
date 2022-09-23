@@ -142,6 +142,26 @@ func PeeringStateFromAPI(t api.PeeringState) PeeringState {
 	}
 }
 
+func StreamStatusToAPI(status *StreamStatus) api.PeeringStreamStatus {
+	return api.PeeringStreamStatus{
+		ImportedServiceCount: status.ImportedServiceCount,
+		ExportedServiceCount: status.ExportedServiceCount,
+		LastHeartbeat:        structs.TimeFromProto(status.LastHeartbeat),
+		LastReceive:          structs.TimeFromProto(status.LastReceive),
+		LastSend:             structs.TimeFromProto(status.LastSend),
+	}
+}
+
+func StreamStatusFromAPI(status api.PeeringStreamStatus) *StreamStatus {
+	return &StreamStatus{
+		ImportedServiceCount: status.ImportedServiceCount,
+		ExportedServiceCount: status.ExportedServiceCount,
+		LastHeartbeat:        structs.TimeToProto(status.LastHeartbeat),
+		LastReceive:          structs.TimeToProto(status.LastReceive),
+		LastSend:             structs.TimeToProto(status.LastSend),
+	}
+}
+
 func (p *Peering) IsActive() bool {
 	if p == nil || p.State == PeeringState_TERMINATED {
 		return false
