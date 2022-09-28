@@ -158,6 +158,8 @@ commands:
               ${GO_TEST_FLAGS-} \
               -cover -coverprofile=coverage.txt
 
+      - run: go tool cover -html=coverage.txt -o $TEST_RESULTS_DIR/coverage.html
+      - run: go tool cover -func coverage.txt -o $TEST_RESULTS_DIR/coverage.txt
       - store_test_results:
           path: *TEST_RESULTS_DIR
       - store_artifacts:
