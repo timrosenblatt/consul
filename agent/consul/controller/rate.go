@@ -2,6 +2,7 @@ package controller
 
 import (
 	"math"
+	"sync"
 	"time"
 )
 
@@ -24,6 +25,7 @@ type ratelimiter struct {
 	failures map[Request]int
 	base     time.Duration
 	max      time.Duration
+	mutex    sync.RWMutex
 }
 
 // NewRateLimiter returns a Limiter that does per-item exponential
@@ -39,6 +41,9 @@ func NewRateLimiter(base, max time.Duration) Limiter {
 // NextRetry returns the remaining time until the queue should
 // reprocess a Request.
 func (r *ratelimiter) NextRetry(request Request) time.Duration {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
 	exponent := r.failures[request]
 	r.failures[request] = r.failures[request] + 1
 
@@ -58,5 +63,8 @@ func (r *ratelimiter) NextRetry(request Request) time.Duration {
 
 // Forget causes the Limiter to reset the backoff for the Request.
 func (r *ratelimiter) Forget(request Request) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
 	delete(r.failures, request)
 }

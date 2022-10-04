@@ -164,12 +164,9 @@ func (c *controller) Start(ctx context.Context) error {
 
 				index = event.Index
 
-				entryEvent, ok := event.Payload.(state.EventPayloadConfigEntry)
-				if !ok {
-					return errors.New("only config entries are supported for controllers")
+				if err := c.processEvent(sub, event); err != nil {
+					return err
 				}
-
-				c.enqueueEntry(sub.transformers, entryEvent.Value)
 			}
 		})
 	}
@@ -192,6 +189,23 @@ func (c *controller) Start(ctx context.Context) error {
 
 	<-groupCtx.Done()
 	return nil
+}
+
+func (c *controller) processEvent(sub subscription, event stream.Event) error {
+	switch payload := event.Payload.(type) {
+	case state.EventPayloadConfigEntry:
+		c.enqueueEntry(sub.transformers, payload.Value)
+		return nil
+	case *stream.PayloadEvents:
+		for _, event := range payload.Items {
+			if err := c.processEvent(sub, event); err != nil {
+				return err
+			}
+		}
+		return nil
+	default:
+		return fmt.Errorf("unhandled event type: %T", payload)
+	}
 }
 
 // enqueueEntry adds all of the given entry into the work queue

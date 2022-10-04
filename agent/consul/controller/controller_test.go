@@ -18,12 +18,12 @@ import (
 func TestBasicController(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	reconciler := newTestReconciler(false)
 
-	publisher := stream.NewEventPublisher(0)
+	publisher := stream.NewEventPublisher(1 * time.Millisecond)
 	go publisher.Run(ctx)
 
 	// get the store through the FSM since the publisher handlers get registered through it
@@ -35,11 +35,6 @@ func TestBasicController(t *testing.T) {
 		Publisher: publisher,
 	}).State()
 
-	go New(publisher, reconciler).Subscribe(&stream.SubscribeRequest{
-		Topic:   state.EventTopicIngressGateway,
-		Subject: stream.SubjectWildcard,
-	}).WithWorkers(10).Start(ctx)
-
 	for i := 0; i < 200; i++ {
 		entryIndex := uint64(i + 1)
 		name := fmt.Sprintf("foo-%d", i)
@@ -49,6 +44,11 @@ func TestBasicController(t *testing.T) {
 		}))
 	}
 
+	go New(publisher, reconciler).Subscribe(&stream.SubscribeRequest{
+		Topic:   state.EventTopicIngressGateway,
+		Subject: stream.SubjectWildcard,
+	}).WithWorkers(10).Start(ctx)
+
 	received := []string{}
 LOOP:
 	for {
@@ -56,6 +56,9 @@ LOOP:
 		case request := <-reconciler.received:
 			require.Equal(t, structs.IngressGateway, request.Kind)
 			received = append(received, request.Name)
+			if len(received) == 200 {
+				break LOOP
+			}
 		case <-ctx.Done():
 			break LOOP
 		}
