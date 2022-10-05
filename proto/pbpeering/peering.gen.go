@@ -82,6 +82,9 @@ func PeeringToAPI(s *Peering, t *api.Peering) {
 	t.ExportedServices = s.ExportedServices
 	t.CreateIndex = s.CreateIndex
 	t.ModifyIndex = s.ModifyIndex
+	if s.Remote != nil {
+		RemoteInfoToAPI(s.Remote, &t.Remote)
+	}
 }
 func PeeringFromAPI(t *api.Peering, s *Peering) {
 	if s == nil {
@@ -103,4 +106,23 @@ func PeeringFromAPI(t *api.Peering, s *Peering) {
 	s.ExportedServices = t.ExportedServices
 	s.CreateIndex = t.CreateIndex
 	s.ModifyIndex = t.ModifyIndex
+	{
+		var x RemoteInfo
+		RemoteInfoFromAPI(&t.Remote, &x)
+		s.Remote = &x
+	}
+}
+func RemoteInfoToAPI(s *RemoteInfo, t *api.PeeringRemoteInfo) {
+	if s == nil {
+		return
+	}
+	t.Partition = s.Partition
+	t.Datacenter = s.Datacenter
+}
+func RemoteInfoFromAPI(t *api.PeeringRemoteInfo, s *RemoteInfo) {
+	if s == nil {
+		return
+	}
+	s.Partition = t.Partition
+	s.Datacenter = t.Datacenter
 }

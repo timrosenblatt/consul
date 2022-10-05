@@ -650,6 +650,98 @@ func TestLeader_Peering_DeferredDeletion(t *testing.T) {
 	})
 }
 
+func TestLeader_Peering_RemoteInfo(t *testing.T) {
+	if testing.Short() {
+		t.Skip("too slow for testing.Short")
+	}
+
+	_, acceptingServer := testServerWithConfig(t, func(c *Config) {
+		c.NodeName = "acceptingServer.test-dc1"
+		c.Datacenter = "test-dc1"
+		c.TLSConfig.Domain = "consul"
+		c.PeeringEnabled = true
+	})
+	testrpc.WaitForLeader(t, acceptingServer.RPC, "test-dc1")
+
+	// Create a peering by generating a token.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	t.Cleanup(cancel)
+
+	conn, err := grpc.DialContext(ctx, acceptingServer.config.RPCAddr.String(),
+		grpc.WithContextDialer(newServerDialer(acceptingServer.config.RPCAddr.String())),
+		grpc.WithInsecure(),
+		grpc.WithBlock())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	acceptingClient := pbpeering.NewPeeringServiceClient(conn)
+	req := pbpeering.GenerateTokenRequest{
+		PeerName: "my-peer-dialing-server",
+	}
+	resp, err := acceptingClient.GenerateToken(ctx, &req)
+	require.NoError(t, err)
+	tokenJSON, err := base64.StdEncoding.DecodeString(resp.PeeringToken)
+	require.NoError(t, err)
+	var token structs.PeeringToken
+	require.NoError(t, json.Unmarshal(tokenJSON, &token))
+	require.Equal(t, "test-dc1", token.Remote.Datacenter)
+	require.Contains(t, []string{"", "default"}, token.Remote.Partition)
+
+	// Bring up dialingServer and store acceptingServer's token so that it attempts to dial.
+	_, dialingServer := testServerWithConfig(t, func(c *Config) {
+		c.NodeName = "dialing-server.test-dc2"
+		c.Datacenter = "test-dc2"
+		c.PrimaryDatacenter = "test-dc2"
+		c.PeeringEnabled = true
+	})
+	testrpc.WaitForLeader(t, dialingServer.RPC, "test-dc2")
+
+	// Create a peering at s2 by establishing a peering with s1's token
+	ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
+	t.Cleanup(cancel)
+
+	conn, err = grpc.DialContext(ctx, dialingServer.config.RPCAddr.String(),
+		grpc.WithContextDialer(newServerDialer(dialingServer.config.RPCAddr.String())),
+		grpc.WithInsecure(),
+		grpc.WithBlock())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	dialingClient := pbpeering.NewPeeringServiceClient(conn)
+
+	establishReq := pbpeering.EstablishRequest{
+		PeerName:     "my-peer-s1",
+		PeeringToken: resp.PeeringToken,
+	}
+	_, err = dialingClient.Establish(ctx, &establishReq)
+	require.NoError(t, err)
+
+	// Ensure that the dialer's remote info contains the acceptor's dc.
+	ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
+	t.Cleanup(cancel)
+	p, err := dialingClient.PeeringRead(ctx, &pbpeering.PeeringReadRequest{Name: "my-peer-s1"})
+	require.NoError(t, err)
+	require.Equal(t, "test-dc1", p.Peering.Remote.Datacenter)
+	require.Contains(t, []string{"", "default"}, p.Peering.Remote.Partition)
+
+	// Retry fetching the until the peering is active in the acceptor.
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+	p = nil
+	for p == nil && ctx.Err() == nil {
+		p, err = acceptingClient.PeeringRead(ctx, &pbpeering.PeeringReadRequest{Name: "my-peer-dialing-server"})
+		require.NoError(t, err)
+		if p.Peering.State != pbpeering.PeeringState_ACTIVE {
+			p = nil
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	// Ensure that the acceptor's remote info contains the dialer's dc.
+	require.NotNil(t, p)
+	require.Equal(t, "test-dc2", p.Peering.Remote.Datacenter)
+	require.Contains(t, []string{"", "default"}, p.Peering.Remote.Partition)
+}
+
 // Test that the dialing peer attempts to reestablish connections when the accepting peer
 // shuts down without sending a Terminated message.
 //
