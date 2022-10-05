@@ -16,7 +16,18 @@ export default class Peer extends Model {
   @attr('string') Name;
   @attr('string') State;
   @attr('string') ID;
+  @attr('string') PeerID;
   @attr('number') ImportedServiceCount;
   @attr('number') ExportedServiceCount;
   @attr() PeerServerAddresses;
+
+  // if we receive a PeerID we know that we are dealing with the side that
+  // established the peering
+  get isReceiver() {
+    return this.PeerID;
+  }
+
+  get isDialer() {
+    return !this.isReceiver;
+  }
 }
