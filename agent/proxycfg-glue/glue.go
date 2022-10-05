@@ -73,15 +73,6 @@ func CacheServiceGateways(c *cache.Cache) proxycfg.GatewayServices {
 	return &cacheProxyDataSource[*structs.ServiceSpecificRequest]{c, cachetype.ServiceGatewaysName}
 }
 
-// CacheHTTPChecks satisifies the proxycfg.HTTPChecks interface by sourcing
-// data from the agent cache.
-//
-// Note: there isn't a server-local equivalent of this data source because only
-// services registered to the local agent can be health checked by it.
-func CacheHTTPChecks(c *cache.Cache) proxycfg.HTTPChecks {
-	return &cacheProxyDataSource[*cachetype.ServiceHTTPChecksRequest]{c, cachetype.ServiceHTTPChecksName}
-}
-
 // CacheLeafCertificate satisifies the proxycfg.LeafCertificate interface by
 // sourcing data from the agent cache.
 //

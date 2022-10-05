@@ -4395,6 +4395,7 @@ func (a *Agent) proxyDataSources() proxycfg.DataSources {
 		sources.FederationStateListMeshGateways = proxycfgglue.ServerFederationStateListMeshGateways(deps)
 		sources.GatewayServices = proxycfgglue.ServerGatewayServices(deps)
 		sources.Health = proxycfgglue.ServerHealth(deps, proxycfgglue.ClientHealth(a.rpcClientHealth))
+		sources.HTTPChecks = proxycfgglue.ServerHTTPChecks(deps)
 		sources.Intentions = proxycfgglue.ServerIntentions(deps)
 		sources.IntentionUpstreams = proxycfgglue.ServerIntentionUpstreams(deps)
 		sources.IntentionUpstreamsDestination = proxycfgglue.ServerIntentionUpstreamsDestination(deps)
