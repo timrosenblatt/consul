@@ -1,9 +1,31 @@
 import RepositoryService from 'consul-ui/services/repository';
 import dataSource from 'consul-ui/decorators/data-source';
+import { inject as service } from '@ember/service';
 
 export default class PeerService extends RepositoryService {
+  @service store;
+
   getModelName() {
     return 'peer';
+  }
+
+  @dataSource('/:partition/:ns/:ds/exported-services/:name')
+  async fetchExportedServices({ dc, ns, partition, name }, configuration, request) {
+    return (
+      await request`
+      GET /v1/internal/ui/exported-services
+
+      ${{
+        peer: name,
+      }}
+    `
+    )((headers, body, cache) => {
+      const serviceSerializer = this.store.serializerFor('service');
+
+      return this.store.push(
+        serviceSerializer.createJSONApiDocumentFromServicesPayload(headers, body, dc)
+      );
+    });
   }
 
   @dataSource('/:partition/:ns/:dc/peering/token-for/:name')
