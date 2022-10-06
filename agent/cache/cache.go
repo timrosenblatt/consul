@@ -528,7 +528,7 @@ RETRY_GET:
 
 	// At this point, we know we either don't have a value at all or the
 	// value we have is too old. We need to wait for new data.
-	waiterCh := c.fetch(key, r, true, 0, false)
+	waiterCh := c.fetch(ctx, key, r, true, 0, false)
 
 	// No longer our first time through
 	first = false
@@ -563,7 +563,7 @@ func makeEntryKey(t, dc, peerName, token, key string) string {
 // If allowNew is true then the fetch should create the cache entry
 // if it doesn't exist. If this is false, then fetch will do nothing
 // if the entry doesn't exist. This latter case is to support refreshing.
-func (c *Cache) fetch(key string, r getOptions, allowNew bool, attempt uint, ignoreExisting bool) <-chan struct{} {
+func (c *Cache) fetch(ctx context.Context, key string, r getOptions, allowNew bool, attempt uint, ignoreExisting bool) <-chan struct{} {
 	// We acquire a write lock because we may have to set Fetching to true.
 	c.entriesLock.Lock()
 	defer c.entriesLock.Unlock()
@@ -615,6 +615,7 @@ func (c *Cache) fetch(key string, r getOptions, allowNew bool, attempt uint, ign
 
 	tEntry := r.TypeEntry
 	// The actual Fetch must be performed in a goroutine.
+
 	go func() {
 		// If we have background refresh and currently are in "disconnected" state,
 		// waiting for a response might mean we mark our results as stale for up to
@@ -819,6 +820,12 @@ func (c *Cache) fetch(key string, r getOptions, allowNew bool, attempt uint, ign
 				return
 			}
 
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
 			// If we're over the attempt minimum, start an exponential backoff.
 			if wait := backOffWait(attempt); wait > 0 {
 				time.Sleep(wait)
@@ -834,7 +841,7 @@ func (c *Cache) fetch(key string, r getOptions, allowNew bool, attempt uint, ign
 			// happened, we don't want to create a new entry.
 			r.Info.MustRevalidate = false
 			r.Info.MinIndex = 0
-			c.fetch(key, r, false, attempt, true)
+			c.fetch(ctx, key, r, false, attempt, true)
 		}
 	}()
 
